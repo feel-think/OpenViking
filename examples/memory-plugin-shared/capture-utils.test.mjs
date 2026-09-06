@@ -32,6 +32,19 @@ test("toolStatus keeps snake_case is_error support", () => {
   assert.equal(toolPart(parts).tool_status, "error")
 })
 
+test("toolStatus recognizes a camelCase isError nested under state", () => {
+  const parts = extractPartsFromPayload({
+    role: "user",
+    content: [{
+      type: "tool-result",
+      toolCallId: "call-2b",
+      state: { isError: true },
+      output: "connection refused",
+    }],
+  }, { toolNameById: { "call-2b": "mysqladmin" } })
+  assert.equal(toolPart(parts).tool_status, "error")
+})
+
 test("toolStatus stays completed for a successful camelCase result", () => {
   const parts = extractPartsFromPayload({
     role: "user",
