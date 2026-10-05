@@ -96,9 +96,14 @@ function captureMessage(event, message, config, toolNames) {
   return payload;
 }
 
-export function promptText(messages) {
+export function promptText(messages, options = {}) {
   return (messages || [])
     .filter(message => !isOpenVikingPluginMessage(message))
+    // Opt-in: harness-injected context producers (time-context, goal, runtime-context,
+    // plugin notices …) carry no memory-retrieval signal yet dominate the text — measured
+    // at 76% of the query on a real session. `captureEvent` already applies this same
+    // predicate; the query builder did not, which is the asymmetry this fixes.
+    .filter(message => !(options.humanOnly === true && isSyntheticUserMessage(message)))
     .map(message => extractTextFromPayload(message))
     .filter(Boolean)
     .join("\n\n")

@@ -17,6 +17,16 @@ export function apply(ctx, input = {}) {
     // The shared loader preserves host/env precedence over workspace peers.
     resolveConfig(input, process.env, cwd).effectivePeer
   ));
+  /**
+   * Opt-in: a step is "human triggered" when at least one message it claimed came from the
+   * human. Plugins injecting into `agent/pre-step` (skill bodies, context producers) claim
+   * steps of their own; recalling there is redundant and, because the query differs, the
+   * server's turn dedup does not collapse it.
+   */
+  const skipRecallFor = stepMessages => (
+    config.recallHumanTriggeredOnly
+    && !(stepMessages ?? []).some(message => message?.source?.kind === "user")
+  );
   const skipMemory = session => (
     config.skipSubagentSessions && session?.header?.origin === "subagent"
   );
@@ -82,7 +92,9 @@ export function apply(ctx, input = {}) {
     if (decision.kind !== "enter" || signal.aborted) return decision;
     const [profile, recall] = await Promise.all([
       runtime.profileMessage(agent),
-      runtime.recallMessage(agent, decision.messages),
+      // `messages` is what this step claimed (dsh-agent-loop passes `claimed` here);
+      // `decision.messages` also carries the loop's runtime context, which is not input.
+      skipRecallFor(messages) ? null : runtime.recallMessage(agent, decision.messages),
     ]);
     if (signal.aborted) return decision;
     const additions = [profile, recall].filter(Boolean);
