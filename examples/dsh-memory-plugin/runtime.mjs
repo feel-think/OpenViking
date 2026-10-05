@@ -130,7 +130,19 @@ export class OpenVikingRuntime {
   async recallMessage(agent, messages) {
     const state = await this.initialize(agent);
     if (!state.ready || !isRecallEnabled(state.config)) return null;
-    const query = promptText(messages, { humanOnly: state.config.recallQueryHumanOnly === true });
+    const humanOnly = state.config.recallQueryHumanOnly === true;
+    const query = promptText(messages, { humanOnly });
+    if (state.config.logRecallQuery === true) {
+      // Observability for the synthetic-injection fix: log the text that is actually sent,
+      // plus how much harness boilerplate the human-only filter dropped from it.
+      const unfiltered = promptText(messages).length;
+      this.log("recall_query", {
+        chars: query.length,
+        humanOnly,
+        droppedSyntheticChars: Math.max(0, unfiltered - query.length),
+        text: query,
+      });
+    }
     if (query.length < state.config.minQueryLength) return null;
     const block = await buildRecallBlock(
       (path, init, options) => this.client.fetchJSON(path, init, options),

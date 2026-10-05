@@ -36,9 +36,10 @@ function jsonResponse(result, status = 200) {
 /** Mount the plugin and capture every recall query it sends. */
 function mount(config = {}) {
   const handlers = new Map();
+  const debugLines = [];
   let runtime;
   const ctx = {
-    logger: { debug() {} },
+    logger: { debug: (line) => debugLines.push(String(line)) },
     provide(name, value) {
       if (name === "openvikingMemory") runtime = value;
     },
@@ -84,6 +85,7 @@ function mount(config = {}) {
 
   return {
     queries,
+    debugLines,
     async preStep(messages) {
       return handlers.get("agent/pre-step")(
         { agent, messages, signal: new AbortController().signal },
@@ -139,6 +141,35 @@ test("B': a step triggered by a human message recalls even when synthetic contex
   try {
     await h.preStep([human("帮我看下这个问题"), synthetic("goal: round 12")]);
     assert.equal(h.queries.length, 1, "a human-triggered step must still recall");
+  } finally {
+    h.restore();
+  }
+});
+
+test("C: with logRecallQuery on, the recall query text is logged (so the fix is observable)", async () => {
+  const h = mount({ recallQueryHumanOnly: true, logRecallQuery: true });
+  try {
+    await h.preStep([
+      human("数据库连接池该怎么配"),
+      synthetic("Time sampled while preparing turn 12, step 3: 2026-10-05T21:00:00+08:00 [Asia/Shanghai]"),
+    ]);
+    const line = h.debugLines.find(l => l.includes('recall_query'));
+    assert.ok(line, "expected a recall_query log line; got:\n" + h.debugLines.join("\n"));
+    const payload = JSON.parse(line.slice(line.indexOf('{')));
+    assert.equal(payload.text, "数据库连接池该怎么配", "the logged text is the query actually sent");
+    assert.equal(payload.chars, payload.text.length);
+    assert.equal(payload.humanOnly, true);
+    assert.ok(payload.droppedSyntheticChars > 0, "must report how much synthetic text was dropped");
+  } finally {
+    h.restore();
+  }
+});
+
+test("C': with logRecallQuery off, nothing is logged", async () => {
+  const h = mount({ recallQueryHumanOnly: true });
+  try {
+    await h.preStep([human("A"), synthetic("B")]);
+    assert.equal(h.debugLines.filter(l => l.includes('recall_query')).length, 0);
   } finally {
     h.restore();
   }

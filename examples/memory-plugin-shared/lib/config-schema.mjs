@@ -182,6 +182,7 @@ export const KNOBS = [
   { name: "skipSubagentSessions", type: "bool", default: false, env: "OPENVIKING_SKIP_SUBAGENT_SESSIONS", capability: "session" },
   { name: "recallQueryHumanOnly", type: "bool", default: false, env: "OPENVIKING_RECALL_QUERY_HUMAN_ONLY", capability: "recall" },
   { name: "recallHumanTriggeredOnly", type: "bool", default: false, env: "OPENVIKING_RECALL_HUMAN_TRIGGERED_ONLY", capability: "recall" },
+  { name: "logRecallQuery", type: "bool", default: false, env: "OPENVIKING_LOG_RECALL_QUERY", capability: "recall" },
   { name: "repoContext", type: "bool", default: true, capability: "session" },
   { name: "repoContextCacheTtlMs", type: "int", default: 60000, min: 1000, max: 3600000, capability: "session" },
 
