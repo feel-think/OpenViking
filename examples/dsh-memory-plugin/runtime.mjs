@@ -1,4 +1,5 @@
 import { isCaptureEnabled } from "./shared/capture-utils.mjs";
+import { applyInputFilters, compileInputFilters } from "./shared/input-filters.mjs";
 import { buildProfileBlock } from "./shared/profile-inject.mjs";
 import { buildRecallBlock, isRecallEnabled } from "./shared/recall-core.mjs";
 import {
@@ -131,7 +132,15 @@ export class OpenVikingRuntime {
     const state = await this.initialize(agent);
     if (!state.ready || !isRecallEnabled(state.config)) return null;
     const humanOnly = state.config.recallQueryHumanOnly === true;
-    const query = promptText(messages, { humanOnly });
+    let query = promptText(messages, { humanOnly });
+    // `recallQueryFilters` has been declared in the shared schema all along, but only the
+    // capture side ever compiled filters (its own key, `captureFilters`). Without this the
+    // documented escape hatch cannot reach the query at all. Same helper as capture.
+    const compiled = compileInputFilters(state.config.recallQueryFilters);
+    if (compiled.rules.length) {
+      const verdict = applyInputFilters(query, compiled.rules, { role: "user" });
+      query = verdict.dropped ? "" : verdict.text;
+    }
     if (state.config.logRecallQuery === true) {
       // Observability for the synthetic-injection fix: log the text that is actually sent,
       // plus how much harness boilerplate the human-only filter dropped from it.

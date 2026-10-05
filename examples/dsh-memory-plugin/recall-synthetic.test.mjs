@@ -175,6 +175,35 @@ test("C': with logRecallQuery off, nothing is logged", async () => {
   }
 });
 
+test("D: recallQueryFilters is honoured on the query path (declared in the schema, never wired)", async () => {
+  // The knob exists in shared/config-schema.mjs ("recallQueryFilters", type list, default [])
+  // and the capture side compiles a sibling key (captureFilters), but the recall query path
+  // never called compileInputFilters/applyInputFilters — so a user could not filter the query
+  // at all. This asserts the documented escape hatch actually reaches the query.
+  const h = mount({ recallQueryFilters: ["s/Time sampled[^\\n]*//"] });
+  try {
+    await h.preStep([
+      human("数据库连接池该怎么配"),
+      synthetic("Time sampled while preparing turn 12, step 3: 2026-10-05T21:00:00+08:00"),
+    ]);
+    assert.equal(h.queries.length, 1);
+    assert.doesNotMatch(h.queries[0], /Time sampled/, "the configured rule must strip that text");
+    assert.match(h.queries[0], /数据库连接池该怎么配/, "the human text survives");
+  } finally {
+    h.restore();
+  }
+});
+
+test("D': a drop rule (op d) that matches yields no query, so no recall is attempted", async () => {
+  const h = mount({ recallQueryFilters: ["d/Time sampled/"] });
+  try {
+    await h.preStep([synthetic("Time sampled while preparing turn 12")]);
+    assert.equal(h.queries.length, 0, "a dropped query must not be sent");
+  } finally {
+    h.restore();
+  }
+});
+
 test("B'': switching the guard off keeps legacy triggering", async () => {
   const h = mount();
   try {
