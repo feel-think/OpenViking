@@ -3,6 +3,7 @@ import {
   extractTextFromPayload,
   shapeCapturePayload,
 } from "./shared/capture-utils.mjs";
+import { captureAllowed } from "./synthetic-policy.mjs";
 
 export const OPENVIKING_PLUGIN_SOURCE = "openviking-memory";
 export const OPENVIKING_PLUGIN_KIND = `plugin:${OPENVIKING_PLUGIN_SOURCE}`;
@@ -63,7 +64,7 @@ function captureMessage(event, message, config, toolNames) {
   // DSH v4 gives producer-owned context messages their own kind. Treat
   // user-role messages with an explicit non-user/tool kind as synthetic;
   // untagged legacy messages stay capturable for backward compatibility.
-  if (isSyntheticUserMessage(message)) return null;
+  if (isSyntheticUserMessage(message) && !captureAllowed(config.syntheticPolicy, message)) return null;
   if (message.role === "assistant" && config.captureAssistantTurns === false) {
     return null;
   }

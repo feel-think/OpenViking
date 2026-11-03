@@ -1,6 +1,6 @@
 {
   "name": "@openviking/dsh-memory-plugin",
-  "version": "0.5.32",
+  "version": "0.5.33",
   "description": "OpenViking memory and context bundle for DeepSeek Harness",
   "icon": "./icon.svg",
   "type": "module",
@@ -21,6 +21,7 @@
     "mcp-env.mjs",
     "runtime.mjs",
     "session-id.mjs",
+    "synthetic-policy.mjs",
     "skills.mjs",
     "uri-guard.mjs",
     "servers/",

@@ -16,13 +16,16 @@ import {
   promptText,
 } from "./capture.mjs";
 import { deriveDshSessionId } from "./session-id.mjs";
+import { SyntheticPolicyStore, syntheticRecallQuery } from "./synthetic-policy.mjs";
 
 export class OpenVikingRuntime {
-  constructor(client, config, logger = console, resolveSessionPeer = null) {
+  constructor(client, config, logger = console, resolveSessionPeer = null, resolveStateDir = null) {
     this.client = client;
     this.config = config;
     this.logger = logger;
     this.resolveSessionPeer = resolveSessionPeer;
+    this.resolveStateDir = resolveStateDir;
+    this.policyStore = new SyntheticPolicyStore(logger);
     this.states = new Map();
     this.drainTimer = null;
     this.drainRunning = false;
@@ -47,6 +50,7 @@ export class OpenVikingRuntime {
       dshSessionId: String(session.id),
       ovSessionId: deriveDshSessionId(session.id),
       config: { ...this.config, peerId: peer.peerId, legacyPeerId: peer.legacyPeerId },
+      stateDir: "",
       ready: false,
       profileBlock: "",
       profileDelivered: false,
@@ -58,7 +62,15 @@ export class OpenVikingRuntime {
       disposing: null,
     };
     this.states.set(session.id, state);
+    this.refreshSyntheticPolicy(state);
     return state;
+  }
+
+  /** Resolve the instance policy on every use; the orchestrator service may still be LOADING when the router session is created. */
+  refreshSyntheticPolicy(state) {
+    const stateDir = this.resolveStateDir?.() || "";
+    state.stateDir = stateDir;
+    state.config.syntheticPolicy = this.policyStore.get(stateDir);
   }
 
   async initialize(agent) {
@@ -130,7 +142,9 @@ export class OpenVikingRuntime {
   async recallMessage(agent, messages) {
     const state = await this.initialize(agent);
     if (!state.ready || !isRecallEnabled(state.config)) return null;
-    const query = promptText(messages);
+    this.refreshSyntheticPolicy(state);
+    const query = [promptText(messages), syntheticRecallQuery(messages, state.config.syntheticPolicy, agent.session)]
+      .filter(Boolean).join("\n\n").trim();
     if (!query || query.length < state.config.minQueryLength) return null;
     const block = await buildRecallBlock(
       (path, init, options) => this.client.fetchJSON(path, init, options),
@@ -149,6 +163,7 @@ export class OpenVikingRuntime {
 
   capture(session, event) {
     const state = this.stateFor(session);
+    this.refreshSyntheticPolicy(state);
     if (!isCaptureEnabled(state.config)) return;
     const payload = captureEvent(event, state.config, state.toolNames);
     if (!payload) return;

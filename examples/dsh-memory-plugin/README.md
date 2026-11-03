@@ -276,6 +276,53 @@ The profile's `cordis.patch.yml` can also carry plugin config:
     mcpToolCallTimeoutMs: 60000
 ```
 
+### DSH Superagent policy
+
+DeepSeek Harness profiles keep this policy outside the DSH config schema.
+When the host exposes the SA `orchestrator` service, the plugin reads exactly:
+
+```text
+<stateDir>/ov-memory-policy.json
+```
+
+`stateDir` comes from `ctx.get("orchestrator").machine.stateDir`; the plugin
+does not search the session cwd, infer a path from the installation directory,
+or fall back to another file. A missing file disables synthetic recall and
+capture. Invalid JSON and unsupported versions also disable the policy and log
+a warning. The file is re-read when it changes.
+
+The file controls two independent paths:
+
+- `recall` parses the first text part as a JSON body and builds a query from
+  matching synthetic messages.
+- `capture` does not parse the body; it only admits the original message to the
+  normal capture path.
+
+```json
+{
+  "version": 1,
+  "recall": [
+    { "match": { "source": { "kind": "dsh-superagent", "form": "relay" }, "body": { "kind": "candidate" } } },
+    { "match": { "source": { "kind": "dsh-superagent", "form": "relay" }, "body": { "kind": "follow_up" } } },
+    { "match": {
+      "session": { "agentPreset": "dsh-superagent-worker" },
+      "source": { "kind": "dsh-superagent", "form": "relay" },
+      "body": { "has": ["ticket_id", "trigger"] }
+    } },
+    { "match": {
+      "session": { "agentPreset": "dsh-superagent-worker" },
+      "source": { "kind": "dsh-superagent", "form": "relay" },
+      "body": { "has": ["trigger_id", "text"] }
+    } }
+  ],
+  "capture": [
+    { "match": { "source": { "kind": "dsh-superagent" } } }
+  ]
+}
+```
+
+The two worker rules cover different inputs: `worker_assignment` matches the first assignment (`ticket_id` + `trigger`), while `worker_follow_up` matches the trigger card of a later follow-up (`trigger_id` + `text`). A follow-up card with `context: true` (a subscribed thread read for context) or with an empty `from` (an automated notice such as a GitHub CI result) is not used as a recall query.
+
 Recall normally uses `POST /api/v1/search/search` with `mode: "context"`.
 `recallMaxTokens` (`OPENVIKING_RECALL_MAX_TOKENS`) sets this request's
 `max_tokens` budget for server-assembled context. When it is unset, the plugin
